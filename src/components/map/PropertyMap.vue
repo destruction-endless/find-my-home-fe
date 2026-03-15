@@ -21,7 +21,7 @@ const emit = defineEmits<{
   ): void;
 }>();
 
-let clusterer: MarkerClusterer | null = null;
+let clusterer: InstanceType<typeof MarkerClusterer> | null = null;
 let markers: google.maps.Marker[] = [];
 let activeInfoWindow: google.maps.InfoWindow | null = null;
 let boundsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
