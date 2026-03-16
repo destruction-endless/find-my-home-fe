@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useSeo } from "@/composables/useSeo";
 import { mockProperties } from "@/data/mockProperties";
@@ -10,7 +10,17 @@ import PropertyGallery from "@/components/property/PropertyGallery.vue";
 import PropertyDetailsInfo from "@/components/property/PropertyDetailsInfo.vue";
 import MortgageCalculator from "@/components/property/MortgageCalculator.vue";
 import FavoriteButton from "@/components/property/FavoriteButton.vue";
-import { ArrowLeft, Phone, Mail } from "lucide-vue-next";
+import {
+  ArrowLeft,
+  Phone,
+  Mail,
+  ExternalLink,
+  Navigation,
+  GraduationCap,
+  Hospital,
+  ShoppingBag,
+  UtensilsCrossed,
+} from "lucide-vue-next";
 
 const route = useRoute();
 const router = useRouter();
@@ -18,6 +28,60 @@ const router = useRouter();
 const property = computed(() => {
   const id = Number(route.params.id);
   return mockProperties.find((p) => p.id === id);
+});
+
+interface NearbyPlace {
+  name: string;
+  vicinity: string;
+}
+
+interface NearbyCategory {
+  label: string;
+  type: string;
+  icon: typeof GraduationCap;
+  places: NearbyPlace[];
+}
+
+const nearbyCategories = ref<NearbyCategory[]>([
+  { label: "Schools", type: "school", icon: GraduationCap, places: [] },
+  { label: "Hospitals", type: "hospital", icon: Hospital, places: [] },
+  { label: "Shopping", type: "shopping_mall", icon: ShoppingBag, places: [] },
+  {
+    label: "Restaurants",
+    type: "restaurant",
+    icon: UtensilsCrossed,
+    places: [],
+  },
+]);
+
+const locationMapRef = ref<InstanceType<any> | null>(null);
+
+function loadNearbyPlaces(map: google.maps.Map) {
+  const prop = property.value;
+  if (!prop) return;
+
+  const service = new google.maps.places.PlacesService(map);
+  const location = new google.maps.LatLng(prop.latitude, prop.longitude);
+
+  for (const category of nearbyCategories.value) {
+    service.nearbySearch(
+      { location, radius: 1500, type: category.type },
+      (results, status) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+          category.places = results.slice(0, 3).map((place) => ({
+            name: place.name || "Unknown",
+            vicinity: place.vicinity || "",
+          }));
+        }
+      },
+    );
+  }
+}
+
+onMounted(async () => {
+  if (!locationMapRef.value) return;
+  const map: google.maps.Map = await locationMapRef.value.$mapPromise;
+  loadNearbyPlaces(map);
 });
 
 onMounted(() => {
@@ -154,19 +218,20 @@ onMounted(() => {
                 >
                   Location
                 </h4>
-                <div class="w-full h-40 rounded-lg overflow-hidden">
+                <div class="w-full h-48 rounded-lg overflow-hidden">
                   <GMapMap
+                    ref="locationMapRef"
                     :center="{
                       lat: property.latitude,
                       lng: property.longitude,
                     }"
-                    :zoom="15"
+                    :zoom="16"
                     map-type-id="roadmap"
-                    style="width: 100%; height: 100%"
+                    class="w-full h-full"
                     :options="{
                       mapTypeControl: false,
                       streetViewControl: false,
-                      zoomControl: true,
+                      fullscreenControl: false,
                     }"
                   >
                     <GMapMarker
@@ -176,6 +241,65 @@ onMounted(() => {
                       }"
                     />
                   </GMapMap>
+                </div>
+                <!-- Map action buttons -->
+                <div class="flex gap-2 mt-3">
+                  <a
+                    :href="`https://www.google.com/maps?q=${property.latitude},${property.longitude}`"
+                    target="_blank"
+                    rel="noopener"
+                    class="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-accent border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <ExternalLink :size="14" />
+                    Open in Maps
+                  </a>
+                  <a
+                    :href="`https://www.google.com/maps/dir/?api=1&destination=${property.latitude},${property.longitude}`"
+                    target="_blank"
+                    rel="noopener"
+                    class="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-accent border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <Navigation :size="14" />
+                    Get Directions
+                  </a>
+                </div>
+
+                <!-- Nearby Places -->
+                <div
+                  v-if="nearbyCategories.some((c) => c.places.length > 0)"
+                  class="mt-5"
+                >
+                  <h4
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3"
+                  >
+                    Nearby Places
+                  </h4>
+                  <div class="space-y-3">
+                    <div
+                      v-for="category in nearbyCategories"
+                      :key="category.type"
+                    >
+                      <template v-if="category.places.length > 0">
+                        <div
+                          class="flex items-center gap-1.5 mb-1 text-gray-600 dark:text-gray-400"
+                        >
+                          <component :is="category.icon" :size="13" />
+                          <span class="text-xs font-semibold">{{
+                            category.label
+                          }}</span>
+                        </div>
+                        <ul class="space-y-1 pl-5">
+                          <li
+                            v-for="place in category.places"
+                            :key="place.name"
+                            class="text-xs text-gray-600 dark:text-gray-400 list-disc"
+                          >
+                            {{ place.name }}
+                          </li>
+                        </ul>
+                      </template>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
